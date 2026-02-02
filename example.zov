@@ -1,0 +1,115 @@
+############################################################
+# ZOV Configuration File
+# Полностью соответствует правилам lexer.py и parser.py
+############################################################
+
+# 1. Глобальные переменные (класс ZovVariable)
+# Обязательно заканчиваются точкой с запятой (;).
+$APP_NAME = "ZovSystem";
+$VERSION = "1.0.0";
+$BASE_TIMEOUT = 30s;    # Тип DURATION
+$DEBUG_MODE = true;     # Тип BOOL
+
+# 2. Использование функций (класс ZovFunctionCall)
+# Читает переменную окружения 'PORT', если нет — берет 8080
+$PORT = env("SERVER_PORT", 8080);
+
+############################################################
+# Основная конфигурация сервера (класс ZovCategory)
+############################################################
+Server {
+    name = $APP_NAME;
+    active = $DEBUG_MODE;
+
+    # Использование арифметики (класс ZovExpression)
+    # 8080 + 0 = 8080
+    http_port = $PORT + 0;
+    # 8080 + 443 = 8523
+    https_port = $PORT + 443;
+
+    # Типы данных SIZE и DURATION (обрабатываются в lexer.py)
+    max_body_size = 50MB;
+    idle_timeout = $BASE_TIMEOUT; 
+    
+    # Вложенная категория
+    Limits {
+        # Арифметика с типами (множитель)
+        # Обратите внимание: interpreter.py разрешает умножение чисел
+        request_timeout = $BASE_TIMEOUT * 2;
+        
+        retry_policy {
+            attempts = 5;
+            backoff = 100ms;
+        }
+    }
+}
+
+############################################################
+# Конфигурация Базы Данных
+############################################################
+Database {
+    driver = "postgresql";
+    host = "localhost";
+    
+    # 3. Интерполяция строк (ZovInterpolatedString)
+    # Поддерживает $var и ${var} внутри кавычек
+    connection_info = "Connecting to ${driver} at $host:$PORT";
+    
+    # 4. Списки значений (ZovItem с списком values)
+    # Парсер (parse_item) поддерживает значения через запятую
+    replicas = "db-node-1", "db-node-2", "db-node-3";
+    
+    # Список чисел
+    ports_pool = 5432, 5433, 5434;
+
+    Credentials {
+        # Функция upper() встроена в interpreter.py
+        user = upper("admin"); 
+        
+        # Пример сложной интерполяции
+        # interpreter.py вычисляет выражения внутри ${...}
+        status_msg = "User ${user} has access since ${2023 + 2}";
+    }
+}
+
+############################################################
+# Демонстрация всех типов данных (lexer.py)
+############################################################
+DataTypes {
+    # Числа
+    int_val = 42;
+    float_val = 3.14159;
+    negative = -10;
+
+    # Строки
+    simple_str = "Hello World";
+    path_str = "C:\\Windows\\System32"; # Экранирование
+
+    # Логика и Null
+    is_enabled = true;
+    is_deleted = false;
+    empty_val = null;
+
+    # Специальные типы (распознаются регулярками лексера)
+    cpu_time = 500ms;      # DURATION
+    disk_space = 100GB;    # SIZE
+    birthday = 2025-05-20; # DATE
+    
+    # DATETIME (ISO 8601)
+    meeting = 2025-05-20T14:30:00;
+}
+
+############################################################
+# Функции обработки строк (interpreter.py)
+############################################################
+StringOps {
+    # Функция concat() склеивает аргументы
+    full_path = concat("/var/www/", $APP_NAME);
+    
+    # Функция join(separator, items...)
+    tags = join(", ", "production", "high-load", "v1");
+}
+
+# 5. Инклюд (ZovInclude)
+# Безопасно подключает файл (проверка _safe_include_path)
+# include "routes.zov";
